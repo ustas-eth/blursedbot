@@ -1,0 +1,9 @@
+{
+  "extends": "@tsconfig/node18-strictest-esm/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./ts-build",
+    "lib": ["dom"],
+  },
+  "exclude": ["./tallyho"]
+}
