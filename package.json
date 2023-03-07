@@ -1,7 +1,8 @@
 {
   "type": "module",
   "scripts": {
-    "start": "ts-node-esm ./src/run.ts"
+    "start": "ts-node-esm ./src/run.ts",
+    "profile": "ts-node-esm ./src/profile.ts"
   },
   "dependencies": {
     "dayjs": "^1.11.7",
