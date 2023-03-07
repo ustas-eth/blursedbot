@@ -12,13 +12,15 @@ export async function login() {
     window.localStorage.setItem('blur.wallet.intro', 'true')
   })
 
+  await page.waitForNetworkIdle()
+
   const connect = await page.$('text/connect wallet')
   if (connect) {
     await page.evaluate((e) => e.click(), await connect.toElement('div'))
-    await page.click('#METAMASK')
+
+    const metamask = await page.$('#METAMASK')
+    if (metamask) await page.evaluate((e) => e.click(), await metamask.toElement('div'))
 
     logger.info('Logged into Blur')
   }
-
-  await page.close()
 }
