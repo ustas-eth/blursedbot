@@ -1,6 +1,8 @@
 import type { Page } from 'puppeteer'
+import { logger } from '../../libs/logs.js'
+import { delay } from '../../libs/utils.js'
 
-export async function blurApiRequest(page: Page, uri: string, body: string): Promise<any> {
+export async function blurApiRequest(page: Page, uri: string, body: string, attempt: number = 1): Promise<any> {
   return await page.evaluate(
     async (uri, body) => {
       const response = await fetch(uri, {
@@ -23,7 +25,14 @@ export async function blurApiRequest(page: Page, uri: string, body: string): Pro
         credentials: 'include',
       })
 
-      return response.json()
+      try {
+        const json = await response.json()
+        return json
+      } catch (error) {
+        logger.error(error)
+        await delay(2000 * attempt)
+        return blurApiRequest(page, uri, body)
+      }
     },
     uri,
     body
