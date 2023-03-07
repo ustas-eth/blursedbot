@@ -14,3 +14,8 @@
 - See the RAM on your PC.
 - Captcha solving is not tested. I recommend using your home IP, a good VPN, or residential proxies to pass CloudFlare's protection.
 - The ladder strategy can be unstable. Consider using the base strategy if you don't understand the code; it's safer.
+
+## SCREENSHOOOOOTS
+![VSCodium_7Yu5zj5XX5](https://user-images.githubusercontent.com/82833595/223421205-696f0337-d3f1-47a7-927f-ef0706b68a64.png)
+![chrome_lr05nebRzZ](https://user-images.githubusercontent.com/82833595/223421208-3285fec0-99b1-4a25-9d9e-e12220b0b73b.png)
+![chrome_WYwLJ7a8zm](https://user-images.githubusercontent.com/82833595/223421215-72ff69d0-c3f4-47ca-9636-16ebcdf1e246.png)
