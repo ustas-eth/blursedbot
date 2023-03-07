@@ -1,5 +1,5 @@
 import type { Page, Target } from 'puppeteer'
-import { password, seed } from '../config.js'
+import { PASSWORD, SEED } from '../config.js'
 import { browser } from './puppeteer.js'
 
 export async function init() {
@@ -16,18 +16,18 @@ export async function init() {
     await page.click('button.jsx-215754567')
 
     const passInput = await page.$$('input.jsx-1637087302')
-    await passInput[0]?.type(password)
-    await passInput[1]?.type(password)
+    await passInput[0]?.type(PASSWORD)
+    await passInput[1]?.type(PASSWORD)
     await page.click('button.large')
 
     await page.waitForSelector('textarea')
-    await page.type('textarea', seed)
+    await page.type('textarea', SEED)
     await page.click('button.jsx-215754567')
   } else {
     await page.click('div.avatar')
     await page.waitForSelector('button.signing_btn')
     await page.$eval('button.signing_btn', (button) => button.click())
-    await page.type('#signing_password', password)
+    await page.type('#signing_password', PASSWORD)
     await page.$eval('button.large', (button) => button.click())
   }
 

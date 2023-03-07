@@ -12,6 +12,7 @@
     "pino-pretty": "^9.3.0",
     "puppeteer": "^19.7.1",
     "puppeteer-extra": "^3.3.4",
+    "puppeteer-extra-plugin-recaptcha": "^3.6.6",
     "puppeteer-extra-plugin-stealth": "^2.11.1",
     "socket.io-parser": "^4.2.2"
   },

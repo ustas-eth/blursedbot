@@ -1,5 +1,5 @@
 import type { Page } from 'puppeteer'
-import { blur } from '../../config.js'
+import { blur, CAPTCHA_KEY, timings } from '../../config.js'
 import { browser } from '../../libs/puppeteer.js'
 import { Decoder } from 'socket.io-parser'
 import Decimal from 'decimal.js-light'
@@ -7,16 +7,18 @@ import { wallet } from '../../libs/ethers.js'
 import type { Bid, BidLevel, CancelBidResponse, FormatBidResponse, SubmitBidResponse } from './types.js'
 import { blurApiRequest } from './requests.js'
 import { logger } from '../../libs/logs.js'
+import { randomInt } from 'crypto'
+import { delay } from '../../libs/utils.js'
 
 export abstract class Collection {
   name: string
   address: string
 
   protected logger
-  protected started = false
+  protected onBidsUpdateActivated = false
   protected volume: { fifteen?: string; day?: string; week?: string } = {}
   protected bidLevels: BidLevel[] = []
-  protected bid?: Bid
+  protected bids: Map<string, Bid> = new Map()
 
   private page?: Page
   private decoder = new Decoder()
@@ -27,7 +29,7 @@ export abstract class Collection {
 
     this.name = name
     this.address = address
-    this.logger = logger.child({ collection: { name, address } })
+    this.logger = logger.child({ collection: { name } })
 
     this.logger.info(`New Collection`)
   }
@@ -97,19 +99,63 @@ export abstract class Collection {
               }
             }
           )
-          .catch((err) => this.logger.error(err))
+          .catch((err) => this.logger.error(err, 'Problems with the hook on API responses'))
     })
 
     // Open Bids page
     await page.goto(`https://blur.io/collection/${this.name}/bids`)
 
     this.page = page
-    this.started = true
+    this.onBidsUpdateActivated = true
+
+    // Enable autoreload of the page every random(N) seconds
+    if (timings.reload.max !== 0) this.autoReload()
+
+    // Enable captcha check of the page every 2-5 seconds
+    this.solveCaptcha()
 
     this.logger.warn('Collection page is now open')
   }
 
-  protected async placeBid(price: string, size: number) {
+  private async autoReload() {
+    if (!this.page) return
+
+    await delay(randomInt(timings.reload.min, timings.reload.max))
+    this.page.reload()
+
+    this.autoReload()
+  }
+
+  private async solveCaptcha() {
+    if (!this.page) return
+
+    await delay(randomInt(2000, 5000))
+
+    if (await this.page.$('input[value="Verify you are human"]')) this.page.click('input[value="Verify you are human"]')
+
+    if (CAPTCHA_KEY.length !== 0) {
+      const result = await this.page.solveRecaptchas()
+      if (result.captchas.length) this.logger.warn(result, 'Captha has been resolved')
+    }
+
+    this.solveCaptcha()
+  }
+
+  protected highestBid(): Bid {
+    return Array(...this.bids.values()).reduce((prev, curr) => (new Decimal(curr.price).gt(prev.price) ? curr : prev), {
+      price: '0',
+      size: 0,
+      depth: new Decimal(0),
+    })
+  }
+
+  protected totalBidsSize(): number {
+    return Array(...this.bids.values())
+      .reduce((acc, bid) => acc.add(bid.size), new Decimal(0))
+      .toNumber()
+  }
+
+  protected async placeBid(bid: Bid) {
     if (!this.page) throw Error(`Collection.placeBid(): Page isn't open yet`)
 
     const date = new Date()
@@ -119,11 +165,15 @@ export abstract class Collection {
     const format: FormatBidResponse = await blurApiRequest(
       this.page,
       'https://core-api.prod.blur.io/v1/collection-bids/format',
-      `{"price":{"unit":"BETH","amount":"${price}"},"quantity":${size},"expirationTime":"${expirationTime}","contractAddress":"${this.address}"}`
+      `{"price":{"unit":"BETH","amount":"${bid.price}"},"quantity":${bid.size},"expirationTime":"${expirationTime}","contractAddress":"${this.address}"}`
     )
 
+    if (format.error === 'Bad Request') this.logger.error('Limit exceeded')
+
     if (format.success !== true || !format.signatures?.[0])
-      throw Error(`Collection.placeBid(): Format request wasn't successful: ${price} ${size} ${JSON.stringify(format)}`)
+      throw Error(
+        `Collection.placeBid(): Format request wasn't successful: ${bid.price} ${bid.size} ${JSON.stringify(format)}`
+      )
 
     const {
       signData: { domain, types, value },
@@ -140,36 +190,39 @@ export abstract class Collection {
 
     if (submit.success !== true)
       throw Error(
-        `Collection.placeBid(): Submit request wasn't successful: ${price} ${size} ${JSON.stringify(
+        `Collection.placeBid(): Submit request wasn't successful: ${bid.price} ${bid.size} ${JSON.stringify(
           submit
         )} ${signature}`
       )
 
-    this.bid = { price, size }
+    this.bids.set(bid.price, bid)
 
-    this.logger.warn(this.bid, 'Bid placed')
+    this.logger.warn(bid, 'Bid placed')
   }
 
-  protected async removeBid(): Promise<boolean> {
+  protected async removeBids(price: string) {
     if (!this.page) throw Error(`Collection.removeBid(): Page isn't open yet`)
-    if (!this.bid) return false
 
-    const cancel: CancelBidResponse = await blurApiRequest(
-      this.page,
-      'https://core-api.prod.blur.io/v1/collection-bids/cancel',
-      `{"prices":["${this.bid.price}"],"contractAddress":"${this.address}"}`
-    )
+    const upperBids = Array(...this.bids.values()).filter((bid) => new Decimal(bid.price).gte(price))
 
-    if (cancel.success !== true)
-      throw Error(
-        `Collection.removeBid(): Cancel request wasn't successful: ${JSON.stringify(this.bid)} ${JSON.stringify(
-          cancel
-        )}`
+    for (const bid of upperBids) {
+      const cancel: CancelBidResponse = await blurApiRequest(
+        this.page,
+        'https://core-api.prod.blur.io/v1/collection-bids/cancel',
+        `{"prices":["${bid.price}"],"contractAddress":"${this.address}"}`
       )
 
-    this.logger.warn(this.bid, 'Bid removed')
+      if (cancel.success !== true && cancel.message !== 'No bids found')
+        throw Error(
+          `Collection.removeBid(): Cancel request wasn't successful: ${JSON.stringify(bid)} ${JSON.stringify(cancel)}`
+        )
 
-    return delete this.bid
+      this.logger.warn(bid, 'Bid removed')
+
+      this.bids.delete(bid.price)
+
+      await delay(randomInt(300, 600))
+    }
   }
 
   protected abstract onBidsUpdate(): Promise<void>
@@ -199,6 +252,6 @@ export abstract class Collection {
 
     this.logger.info({ updates }, 'Bid levels updates')
 
-    if (this.started) this.onBidsUpdate()
+    if (this.onBidsUpdateActivated) this.onBidsUpdate()
   }
 }

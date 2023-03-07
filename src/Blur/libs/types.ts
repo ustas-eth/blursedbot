@@ -1,8 +1,10 @@
+import type Decimal from 'decimal.js-light'
 import type { TypedDataDomain, TypedDataField } from 'ethers'
 
 export type Bid = {
   price: string
   size: number
+  depth: Decimal
 }
 
 export type BidLevel = {
