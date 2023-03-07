@@ -1,5 +1,5 @@
 import dayjs from 'dayjs'
-import pino, { TransportTargetOptions } from 'pino'
+import pino, { TransportTargetOptions, stdTimeFunctions } from 'pino'
 import { DEBUG } from '../config.js'
 
 const startingTime = dayjs()
@@ -9,10 +9,19 @@ const targets: TransportTargetOptions[] = []
 targets.push({
   target: 'pino/file',
   options: {
-    destination: `./logs/${startingTime.format('YYYY-MM-DD_HHmmss')}.log`,
+    destination: `./logs/${startingTime.format('YYYY-MM-DD_HHmmss')}.all.log`,
     mkdir: true,
   },
   level: 'info',
+})
+
+targets.push({
+  target: 'pino/file',
+  options: {
+    destination: `./logs/${startingTime.format('YYYY-MM-DD_HHmmss')}.warn.log`,
+    mkdir: true,
+  },
+  level: 'warn',
 })
 
 if (DEBUG)
@@ -22,11 +31,13 @@ if (DEBUG)
       colorize: true,
       destination: 1,
     },
-    level: 'info',
+    level: 'warn',
   })
 
 export const logger = pino({
   transport: {
     targets,
   },
+  base: {},
+  timestamp: stdTimeFunctions.isoTime,
 })
